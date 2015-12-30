@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+
+	<head>
+		<meta charset="utf-8">
+
+		<title>Microserviceにおけるサーバー間通信</title>
+
+		<meta name="description" content="Microserviceにおけるサーバー間通信">
+		<meta name="author" content="Junchang">
+
+		<meta name="apple-mobile-web-app-capable" content="yes">
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
+
+		<link rel="stylesheet" href="css/reveal.css">
+		<link rel="stylesheet" href="css/theme/black.css" id="theme">
+        <style type="text/css">
+        .reveal h1,
+        .reveal h2,
+        .reveal h3,
+        .reveal h4,
+        .reveal h5,
+        .reveal h6 {
+            text-transform: none;
+        }
+</style>
+
+		<!-- Code syntax highlighting -->
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.9.1/styles/hybrid.min.css">
+
+		<!-- Printing and PDF exports -->
+		<script>
+			var link = document.createElement( 'link' );
+			link.rel = 'stylesheet';
+			link.type = 'text/css';
+			link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+			document.getElementsByTagName( 'head' )[0].appendChild( link );
+		</script>
+
+		<!--[if lt IE 9]>
+		<script src="lib/js/html5shiv.js"></script>
+		<![endif]-->
+	</head>
+
+	<body>
+
+		<div class="reveal">
+
+			<!-- Any section element inside of this container is displayed as a slide -->
+			<div class="slides">
+				<section>
+					<h1>Microserviceに<br/>おけるサーバー間通信</h1>
+					<p>
+						<small>2016.01.04 Go勉強会 Jun Tsuji</small>
+					</p>
+				</section>
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+# Microservice
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+- “Microservices” とはソフトウェアシステムの開発スタイルである
+    - 近年このスタイルでの開発を見てきて良い結果が出ている
+    - 初出は2012年の3月の“Micro services - Java, the Unix Way
+
+- Microservicesは一連の小さなサービスで1つのアプリケーションを開発する手法
+    - それぞれのサービスは自身のプロセスで動いており，軽量な機構（e.g., HTTP API）を通じて情報をやりとりする
+    - これらのサービスは独立して自動デプロイされる
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+## 要は、なるべくひとつひとつのServiceの役割を限定し、それぞれが情報の通信をしあうことでシステムを構築する手法
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+## Microservicesの世界では
+
+## 如何に通信のオーバーヘッドを
+
+## 減らすかが重要
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+## サーバー間通信の種類と特徴
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+## (1) HTTP
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+※ご存知の通り、HTTP2が2015年5月にRFC文書化してますが、
+今回は後述のgRPCと被るのでHTTP1.1を前提として進めます
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+### (1) HTTPの特徴
+- 通信の度に都度接続・切断
+- 3way handshake
+- テキストベース
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+いろいろオーバーヘッドがある
+
+おそらく今回のかませ犬的な役割に
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+## (2) Messagepack RPC
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+### (2) Messagepack RPCの特徴
+- 非同期プロトコル
+- 通信と計算をオーバーラップさせて高速化
+- シンプルな非同期メッセージングライブラリ
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+対抗馬 
+だが以前にベンチを取った時にはいまいちだった
+
+今回はどうか
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+## (3) gRPC
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+### (3) gRPCの特徴
+- Google の基盤システムで採用
+- 通信層はHTTP/2 を介して行われる
+- データ層はデフォルトProtocol Buffersが使われる
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+大本命 
+ぶっちゃけこれが試したかっただけという説も
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+# 計測してみた
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+みんな大好きJMeter
+![](img/jm1.png)
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+```
+MacBook Pro (Retina 13-inch、Early 2015)
+3.1 GHz Intel Core i7
+16 GB 1867 MHz DDR3
+```
+
+![](img/jm2.png)
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+MonolithicなKVS書き込み
+![](img/mono.png)
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+MicroserviceなKVS書き込み
+![](img/mic.png)
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+### (0) Monolithic
+366.1/sec
+
+どうでも良いが会社のMacBook Proより150/sec程遅かったorz
+
+![](img/bench/mono.png)
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+### (1) HTTP
+281.6/sec
+
+実績のあるNginx Proxy(8 worker)をかまして計測。
+
+85/secほど劣化。
+
+
+![](img/bench/http.png)
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+### (2) Messagepack RPC
+計測不能
+
+パケットが破損してメッセージをパース出来ないエラーが大量発生。
+
+Messagepack RPCが、というより実装がいまいちな可能性も・・
+[参考](http://linear-rpc.hatenablog.com/entry/2015/12/27/183138)
+
+
+![](img/bench/messagepack.png)
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+### (3) gRPC
+
+<p style="color:red">361.7/sec</p>
+
+Monolithicパターン(366.1/sec)とほぼ遜色なし。
+
+gRPCすごい！抱いて！
+
+![](img/bench/grpc.png)
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+# おまけ
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+### gRPC触ってる過程でGo的に面白いところがあったので紹介します
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+gRPCは前述の通りデータ層デフォルトで
+
+Protocol Buffersを使用しているが
+
+利用側で別のコーデックに変更することが可能
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+
+grpc.NewServer関数は
+は可変長のServerOptionを受け取る
+``` go
+func main() {
+    grpcL, err := net.Listen("tcp", ":11111")
+        if err != nil {
+            panic(err)
+        }
+    server := grpc.NewServer() // <- ここ
+    proto.RegisterTestServiceServer(server, new(grpcService))
+    server.Serve(grpcL)
+}
+```
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+
+grpcパッケージにはこのServerOptionを生成するメソッドが用意されている
+
+下記の`CustomCodec`関数 を利用することでコーデックのカスタマイズが可能に
+``` go
+// CustomCodec returns a ServerOption that sets a codec for message marshaling and unmarshaling.
+func CustomCodec(codec Codec) ServerOption {
+    return func(o *options) {
+        o.codec = codec
+    }
+}
+
+// MaxConcurrentStreams returns a ServerOption that will apply a limit on the number
+// of concurrent streams to each ServerTransport.
+func MaxConcurrentStreams(n uint32) ServerOption {
+    return func(o *options) {
+        o.maxConcurrentStreams = n
+    }
+}
+
+// Creds returns a ServerOption that sets credentials for server connections.
+func Creds(c credentials.Credentials) ServerOption {
+    return func(o *options) {
+        o.creds = c
+    }
+}
+```
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+grpc.Codecの正体はinterface。
+
+これを実装する
+```go
+// Codec defines the interface gRPC uses to encode and decode messages.
+type Codec interface {
+    // Marshal returns the wire format of v.
+    Marshal(v interface{}) ([]byte, error)
+    // Unmarshal parses the wire format into v.
+    Unmarshal(data []byte, v interface{}) error
+    // String returns the name of the Codec implementation. The returned
+    // string will be used as part of content type in transmission.
+    String() string
+}
+```
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+
+コーデックをJsonにする
+
+```go
+import "github.com/CyberAgent/car-golib/encode"
+
+type CodecJson struct{}
+
+func (c CodecJson) Marshal(v interface{}) ([]byte, error) {
+    return encode.EncodeJson(&v)
+}
+
+func (c CodecJson) Unmarshal(data []byte, v interface{}) error {
+    return encode.DecodeJson(data, &v)
+}
+
+func (c CodecJson) String() string {
+    return "json"
+}
+```
+
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+
+grpc.NewServerの呼び出しを下記に変更すればOK!
+``` go
+func main() {
+    grpcL, err := net.Listen("tcp", ":11111")
+        if err != nil {
+            panic(err)
+        }
+    server := grpc.NewServer(grpc.CustomCodec(codec.CodecJson{}))
+    proto.RegisterTestServiceServer(server, new(grpcService))
+    server.Serve(grpcL)
+}
+```
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+interfaceって本当にいいものですね!
+![](img/robpike.jpg)
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+### (4) gRPC Json Codec
+
+354.9/sec
+
+若干劣化。おそらく通信データサイズを変えれば
+
+もっと顕著に差が出る
+
+![](img/bench/grpc2.png)
+                </script>
+                </section>
+
+
+				<section data-markdown>
+                <script type="text/template">
+### まとめ
+- http
+    - やっぱり遅い。
+    - 導入・テストが楽なので導入箇所によってはあり
+- MessagePack RPC
+    - 実用レベルにするにはカスタマイズする必要あり
+    - 最適化すればgRPCと同等かそれ以上に高速化することも？
+- gRPC
+    - そのままでも十分速い
+    - 要件に合わせてコーデックの変更も容易
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+# The End.
+                </script>
+                </section>
+			</div>
+
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.js"></script>
+
+		<script>
+
+			// Full list of configuration options available at:
+			// https://github.com/hakimel/reveal.js#configuration
+			Reveal.initialize({
+				controls: true,
+				progress: true,
+				history: true,
+				center: true,
+
+				transition: 'convex', // none/fade/slide/convex/concave/zoom
+
+				// Optional reveal.js plugins
+				dependencies: [
+					{ src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+					{ src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+					{ src: 'plugin/zoom-js/zoom.js', async: true },
+					{ src: 'plugin/notes/notes.js', async: true }
+				]
+			});
+
+		</script>
+
+	</body>
+</html>
