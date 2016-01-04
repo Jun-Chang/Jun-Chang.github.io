@@ -112,9 +112,10 @@
 				<section data-markdown>
                 <script type="text/template">
 ### (1) HTTPの特徴
-- 通信の度に都度接続・切断
 - 3way handshake
 - テキストベース
+- ヘッダ情報を都度送受信
+- 1.1よりkeepAliveの利用によりコネクションの使い回しは出来るように
                 </script>
                 </section>
 
