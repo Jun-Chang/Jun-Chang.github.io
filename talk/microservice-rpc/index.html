@@ -254,6 +254,65 @@ Messagepack RPCが、というより実装がいまいちな可能性も・・
 
 				<section data-markdown>
                 <script type="text/template">
+### (2) Messagepack RPC (2015.01.06追記)
+
+計測プログラムに問題があったので修正
+
+パケット破損は起きなくなった
+
+before
+``` go
+    // connを一度だけ生成して使い回していたが・・
+    msgpackOnce.Do(func() {
+        conn, err := net.Dial("tcp", "127.0.0.1:11112")
+        if err != nil {
+            panic(err)
+        }
+        msgpackClient = msgpackrpc.NewSession(conn, true)
+    })
+    res, err := msgpackClient.Send("call")
+```
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+### (2) Messagepack RPC (2015.01.06追記)
+
+after
+``` go
+    // 都度接続・切断するように
+    conn, err := net.Dial("tcp", "127.0.0.1:11112")
+    if err != nil {
+        panic(err)
+    }
+    defer func() {
+        conn.Close()
+    }()
+    msgpackClient := msgpackrpc.NewSession(conn, true)
+    res, err := msgpackClient.Send("call")
+```
+
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+### (2) Messagepack RPC (2015.01.06追記)
+
+ただし負荷をかけしばらくするとローカルポートを食いつぶしてしまう
+```
+http: panic serving 127.0.0.1:50549: dial tcp 127.0.0.1:11112: connect: can't assign requested address'
+```
+
+goroutine safeに コネクションを使い回すようにすれば速度向上できるかも。
+
+                </script>
+                </section>
+
+
+				<section data-markdown>
+                <script type="text/template">
 ### (3) gRPC
 
 <p style="color:red">361.7/sec</p>
