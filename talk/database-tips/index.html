@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+
+	<head>
+		<meta charset="utf-8">
+
+		<title>Golang Database Tips</title>
+
+		<meta name="description" content="Golang Database Tips">
+		<meta name="author" content="Junchang">
+
+		<meta name="apple-mobile-web-app-capable" content="yes">
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
+
+		<link rel="stylesheet" href="css/reveal.css">
+		<link rel="stylesheet" href="css/theme/black.css" id="theme">
+        <style type="text/css">
+        .reveal h1,
+        .reveal h2,
+        .reveal h3,
+        .reveal h4,
+        .reveal h5,
+        .reveal h6 {
+            text-transform: none;
+        }
+</style>
+
+		<!-- Code syntax highlighting -->
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.9.1/styles/hybrid.min.css">
+
+		<!-- Printing and PDF exports -->
+		<script>
+			var link = document.createElement( 'link' );
+			link.rel = 'stylesheet';
+			link.type = 'text/css';
+			link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+			document.getElementsByTagName( 'head' )[0].appendChild( link );
+		</script>
+
+		<!--[if lt IE 9]>
+		<script src="lib/js/html5shiv.js"></script>
+		<![endif]-->
+	</head>
+
+	<body>
+
+		<div class="reveal">
+
+			<!-- Any section element inside of this container is displayed as a slide -->
+			<div class="slides">
+				<section>
+					<h1>Golang Database Tips</h1>
+					<p>
+						<small>2016.01.25 Go勉強会 Jun Tsuji</small>
+					</p>
+				</section>
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+# database/sql<br/> DB
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+## DB
+
+Databaseへの読み書き他、ほとんどの処理をこの構造体(のポインタ)を通して行う。<br/>
+`Open` 関数の結果として取得できる。
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+## 代表的な関数
+
+- Query
+ - Databaseにクエリを発行し`Rows` を受け取る (SELECT文などに対応)
+- Exec
+ - Databaseにクエリを発行するが`Rows`を受け取らず結果の `Result`だけを受け取る(UPDATE文などに対応)
+- Begin
+ - Transactionを開始し、`Tx`を返却する。
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+## Tips ① DBはgoutine safe
+
+DB構造体はgoroutine safe。<br/>
+利用側が排他制御を行う必要はない。
+
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+つまりこういう使い方をしてOK
+```go
+
+func main() {
+    db, _ := sql.Open("mysql", "user:pass@tcp(127.0.0.1:3306)/test")
+    go select(db, 1)
+    go select(db, 2)
+}
+
+fun select(db *sql.DB, id int) {
+    rows, _ := db.Query("SELECT * FROM test WHERE id = ?", id)
+    fmt.Println(rows)
+}
+
+```
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+## Tips ② DB.Closeは呼ばなくてOK
+
+DBは長期間、かつ複数のgoroutineから利用される想定で設計されているため、
+通常利用者がこの関数を呼ぶ必要はない。
+
+<br/>
+
+よくありがちな不要なConnectionが残り続けて云々
+といった懸念に関しては、
+後述のConnection Poolの設定で対応する。
+
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+# Connection Pool
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+# Connection Pool
+`DB` にConnetion Poolの設定を行う関数が用意されている。
+
+- SetMaxOpenConns
+ - 最大接続数を設定する。
+- SetMaxIdleConns
+ - アイドル状態のConnectionを保持する最大数を設定する。`SetMaxOpenConns`で設定された数が上限値となる。
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+## Tips ③Connection Poolの設定は計測して決めましょう
+
+Connection Poolの決定要因
+- 接続先Databaseの 最大接続数 x 起動プロセス数
+- Database接続を行う別プロセスの数(CLI含む)
+- 接続先Databaseのタイムアウト設定
+- サーバースペック、ミドルのバージョン
+- Kernelパラメータ(tcp_tw_xxxなど)
+
+他にもたくさん!
+
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+例えばMySQLの場合、wait_timeout が短い場合でかつ、`SetMaxOpenConns`に大きな数字を設定した場合、その分 `server has gone away` 発生による再接続コストが増えるため、SetMaxOpenConnsには小さい数字を設定した方がむしろパフォーマンスが上がるケースもある。
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+それ以外にも様々な要因があるので、一概にこれ！といった設定は存在しない。
+<br/>
+<br/>
+必ず計測して決めましょう。
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+# Transaction
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+
+`Commit` や `Rooback` などTransaction関連の処理は<br/>
+前述の`Tx`を通して行う
+
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+
+Tx が生成されると、コネクションプールから1つのコネクションが取り出され、Transactionが完了するまで専用に割り当てがされる。
+Transaction外の処理(Ex:Db.Get)がそのコネクションを参照することはできない。
+
+
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+こんなイメージ。
+![](img/pool.png)
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+
+## Tips ④Txはgoroutine safe?
+
+<p style="color:red">
+No。<br/>
+</p>
+理由はCommitやRollbackが呼ばれるタイミングが<br/>
+不定であるから。
+
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+TxはCommitやTransactionが呼ばれると内部のdoneメンバがtrueとなる。
+<br/>
+以後TxでExcなど実行しても処理は行われず、ErrTxDoneというErrorが返却される
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+Transactionの実行は1つのgoroutineで行いましょう.
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+## Tips ⑤Transaction完了前に接続が切れたら?
+
+当然Rollbackされる。
+<br/>
+<br/>
+NW障害などを除き、通常の処理でTransactionの生存期間中にタイムアウトなどで
+接続が切れるようなケースがある場合、それはアプリの作りがおかしい。
+<br/>
+<br/>
+極力Transactionの粒度は細かくしましょう。
+
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+# Datetime
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+## MySQLのDatetimeをTimeとして扱う
+
+MySQLのDatetime(及びDate)は、[]byteやstringの他にtime.Timeで取り扱いもサポートしている.
+ただし何も考えずに使用すると、意図しない動作となる.
+
+```go
+tm := time.Now() // 2016-01-01 00:00:00 JST
+query := "UPDATE test SET created = ? WHERE id = ?"
+// 内部的にtimezoneがUTCと解釈されマイナス9時間される
+db.Exec(query, time.Now(), 1)
+
+rows := db.Query("SELECT created FROM test WHERE id = ?, 1")
+fmt.Println(rows) // oops! created = 2016-12-31 15:00:00
+```
+
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+
+## Tips ⑥TIme型を使う場合の接続パラメータ
+
+parseTimeとlocパラメータを設定する。
+
+```go
+db, _ := sql.Open("mysql", "user:pass@/dbname?parseTime=true&loc=Asia%2FTokyo")
+
+```
+<br/>
+
+私はこれを知らずに、つい最近まで書き込み時にプラス9時間してました...
+
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+# Bulk Insert
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+普通に実装するとこんな感じ
+http://play.golang.org/p/_pgMEj8aNM
+
+```go
+func foo() {
+    rows := []Row{}
+    for i := 0; i < totalSize; i++ {
+        rows := append(rows, Row{})
+        if len(rows) >= bulkSize {
+            bulkInsert(rows)
+            rows = []Row{}
+        }
+    }
+    if len(rows) > 0 {
+        bulkInsert(rows)
+    }
+}
+
+func bulkInsert(rows ...Row) {
+    sql := makeSQL(rows)
+    db.Exec(sql)
+}
+```
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+## Tips ⑦  channelを使ったオシャレなBulk Insert
+
+実装は関数に閉じ込め利用側はchannelに送信するだけ!
+http://play.golang.org/p/ny03PR4pLC
+
+```go
+func foo() {
+    rowChan, donChan := bulkInsert()
+    for i := 0; i < totalSize; i++ {
+        rowChan <- Row{}
+    }
+    doneChan <- true
+}
+
+func bulkInsert() (chan Row, chan bool) {
+    rowChan := make(chan Row)
+    doneChan := make(chan bool)
+
+    rows := []Rows{}
+
+    ins := func() {
+        sql := makeSql(rows)
+        bulkInsert(rows)
+        rows = []Rows{}
+    }()
+
+    go func() {
+        for {
+            select {
+            case row := <-rowchan:
+                rows := append(rows, Row{})
+                if len(rows) >= bulkSize {
+                    ins(rows)
+                }
+            case done:
+                ins(rows)
+                return
+            }
+        }
+
+    }()
+
+    return rowChan, doneChan
+}
+```
+
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+# まとめ
+
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+既視感高い内容でしたが、
+Database周りは誰もが必ず扱うジャンルなので題材として選んでみました。
+
+今後も新たなTipsが出てきたら共有していきたいと思います。
+
+                </script>
+                </section>
+
+				<section data-markdown data-Transition="slide-in fade-out">
+                <script type="text/template">
+## END.
+                </script>
+                </section>
+			</div>
+
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.js"></script>
+
+		<script>
+
+			// Full list of configuration options available at:
+			// https://github.com/hakimel/reveal.js#configuration
+			Reveal.initialize({
+				controls: true,
+				progress: true,
+				history: true,
+				center: true,
+
+				transition: 'convex', // none/fade/slide/convex/concave/zoom
+
+				// Optional reveal.js plugins
+				dependencies: [
+					{ src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+					{ src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+					{ src: 'plugin/zoom-js/zoom.js', async: true },
+					{ src: 'plugin/notes/notes.js', async: true }
+				]
+			});
+
+		</script>
+
+	</body>
+</html>
