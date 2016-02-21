@@ -53,25 +53,34 @@
 				<section>
 					<h1>Golang Database Tips</h1>
 					<p>
-						<small>2016.01.25 Go勉強会 Jun Tsuji</small>
+						<small>2016.02.22 Go勉強会 Jun Tsuji</small>
 					</p>
 				</section>
-				<section data-markdown data-Transition="slide-in fade-out">
+
+				<section data-markdown>
                 <script type="text/template">
-# database/sql<br/> DB
+アプリケーションをGolangで書くにあたりほぼ確実に利用する、<br/>
+Database周りのTipsをとりとめもなく紹介します。
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
-## DB
+## database/sql パッケージ
+
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+## struct DB
 
 Databaseへの読み書き他、ほとんどの処理をこの構造体(のポインタ)を通して行う。<br/>
 `Open` 関数の結果として取得できる。
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
 ## 代表的な関数
 
@@ -84,17 +93,16 @@ Databaseへの読み書き他、ほとんどの処理をこの構造体(のポ�
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
-## Tips ① DBはgoutine safe
+## DBはgoutine safe
 
-DB構造体はgoroutine safe。<br/>
 利用側が排他制御を行う必要はない。
 
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
 つまりこういう使い方をしてOK
 ```go
@@ -114,32 +122,69 @@ fun select(db *sql.DB, id int) {
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
-## Tips ② DB.Closeは呼ばなくてOK
+### Q. なぜ goroutine safe に使えるのか？
+                </script>
+                </section>
 
-DBは長期間、かつ複数のgoroutineから利用される想定で設計されているため、
-通常利用者がこの関数を呼ぶ必要はない。
+				<section data-markdown>
+                <script type="text/template">
 
+### A. goroutine safe なコネクションプールの機構が提供されているから
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+# Connection Pool
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+`DB` でQueryやExecなどを発行すると
+そのクエリ専用のコネクションがプールから一つ取り出される。
+<br/><br/>
+処理が完了し、結果を返却後、プールに接続が戻される。
+(つまり処理中は他で使われることは無い= goroutine safe)
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+こんなイメージ。
+![](img/pool.png)
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+### Q. コネクションプールが全部使われている状態でQueryやExecを実行するとどうなる？
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+
+### A. その処理はブロックされる。
 <br/>
+要件に応じて適切なサイズに設定することが必要。
 
-よくありがちな不要なConnectionが残り続けて云々
-といった懸念に関しては、
-後述のConnection Poolの設定で対応する。
+例えばgoroutineを無数に生成して、その中でQueryを実行するようなプログラムは
+<br/>
+非効率になる可能性がある。<br/>
+一度に実行するgoroutineの数をコネクションプールの数に合わせる、
+などの工夫が必要になる。
+
+
 
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
-# Connection Pool
-                </script>
-                </section>
-
-				<section data-markdown data-Transition="slide-in fade-out">
-                <script type="text/template">
-# Connection Pool
-`DB` にConnetion Poolの設定を行う関数が用意されている。
+`DB` にはConnetion Poolの設定を行う関数が用意されている。
 
 - SetMaxOpenConns
  - 最大接続数を設定する。
@@ -148,120 +193,141 @@ DBは長期間、かつ複数のgoroutineから利用される想定で設計さ
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
-## Tips ③Connection Poolの設定は計測して決めましょう
-
-Connection Poolの決定要因
-- 接続先Databaseの 最大接続数 x 起動プロセス数
-- Database接続を行う別プロセスの数(CLI含む)
-- 接続先Databaseのタイムアウト設定
-- サーバースペック、ミドルのバージョン
-- Kernelパラメータ(tcp_tw_xxxなど)
-
-他にもたくさん!
+逆に言うと設定できるのはこの2つだけ。
+コネクション生存期間(Java EbeanでいうMaxConnectionAge)の設定は無い
 
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
-                <script type="text/template">
-例えばMySQLの場合、wait_timeout が短い場合でかつ、`SetMaxOpenConns`に大きな数字を設定した場合、その分 `server has gone away` 発生による再接続コストが増えるため、SetMaxOpenConnsには小さい数字を設定した方がむしろパフォーマンスが上がるケースもある。
-                </script>
-                </section>
-
-				<section data-markdown data-Transition="slide-in fade-out">
-                <script type="text/template">
-それ以外にも様々な要因があるので、一概にこれ！といった設定は存在しない。
-<br/>
-<br/>
-必ず計測して決めましょう。
-                </script>
-                </section>
-
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
 # Transaction
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
 
-`Commit` や `Rooback` などTransaction関連の処理は<br/>
-前述の`Tx`を通して行う
+`Commit` や `Roolback` などTransaction関連の処理は<br/>
+`Tx`を通して行う
+<br/>
+排他の仕組みは通常のQueryなどとほぼ同じ
 
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
 
 Tx が生成されると、コネクションプールから1つのコネクションが取り出され、Transactionが完了するまで専用に割り当てがされる。
+<br/>
 Transaction外の処理(Ex:Db.Get)がそのコネクションを参照することはできない。
 
-
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
 こんなイメージ。
-![](img/pool.png)
+![](img/tx_pool.png)
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
 
-## Tips ④Txはgoroutine safe?
+### Q. DBがgoroutine safeだからTxも一緒だよね？
+                </script>
+                </section>
 
-<p style="color:red">
-No。<br/>
-</p>
+				<section data-markdown>
+                <script type="text/template">
+
+### A. No。
+<br/>
 理由はCommitやRollbackが呼ばれるタイミングが<br/>
 不定であるから。
 
+```go
+
+func main() {
+    db, _ := sql.Open("mysql", "user:pass@tcp(127.0.0.1:3306)/test")
+    tx, _ := db.Begin()
+
+    go func() {
+      time.Sleep(1 * time.Second)
+      // すでにTransactionが完了しているため失敗する
+      tx.Exec("INSERT INTO ・・・")
+    }()
+
+    go func() {
+      tx.Rollback()
+    }()
+}
+
+```
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
 TxはCommitやTransactionが呼ばれると内部のdoneメンバがtrueとなる。
 <br/>
-以後TxでExcなど実行しても処理は行われず、ErrTxDoneというErrorが返却される
+以後TxでExecなど実行しても処理は行われず、ErrTxDoneというErrorが返却される
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
-Transactionの実行は1つのgoroutineで行いましょう.
+Transactionの開始〜完了までは
+<br/>
+1つのgoroutineで行いましょう.
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
-## Tips ⑤Transaction完了前に接続が切れたら?
+### Q.Transaction完了前に接続が切れたら?
+                </script>
+                </section>
 
-当然Rollbackされる。
-<br/>
-<br/>
-NW障害などを除き、通常の処理でTransactionの生存期間中にタイムアウトなどで
-接続が切れるようなケースがある場合、それはアプリの作りがおかしい。
-<br/>
+				<section data-markdown>
+                <script type="text/template">
+### A. 当然Rollbackされる。
 <br/>
 極力Transactionの粒度は細かくしましょう。
 
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
+                <script type="text/template">
+### DB.Closeは呼ばなくてOK
+
+DBは長期間、かつ複数のgoroutineから利用される想定で設計されているため、
+通常利用者がこの関数を呼ぶ必要はない。
+
+                </script>
+                </section>
+
+				<section data-markdown>
+                <script type="text/template">
+あるとしたらフェールオーバーなどでDBの接続先が変更になるケースだが、
+通常LVSなどアプリ外で対応するケースがほとんどだと思うので
+呼ぶケースが想定できない・・
+(誰か知ってたら教えてください)
+                </script>
+                </section>
+
+				<section data-markdown>
                 <script type="text/template">
 # Datetime
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
 ## MySQLのDatetimeをTimeとして扱う
 
@@ -281,10 +347,10 @@ fmt.Println(rows) // oops! created = 2016-12-31 15:00:00
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
 
-## Tips ⑥TIme型を使う場合の接続パラメータ
+### Time型を使う場合の接続パラメータ
 
 parseTimeとlocパラメータを設定する。
 
@@ -299,13 +365,13 @@ db, _ := sql.Open("mysql", "user:pass@/dbname?parseTime=true&loc=Asia%2FTokyo")
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
-# Bulk Insert
+## おしゃれなBulk Insert
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
 普通に実装するとこんな感じ
 http://play.golang.org/p/_pgMEj8aNM
@@ -333,11 +399,10 @@ func bulkInsert(rows ...Row) {
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
-## Tips ⑦  channelを使ったオシャレなBulk Insert
 
-実装は関数に閉じ込め利用側はchannelに送信するだけ!
+channelを使ってちょっとおしゃれに
 http://play.golang.org/p/ny03PR4pLC
 
 ```go
@@ -384,16 +449,16 @@ func bulkInsert() (chan Row, chan bool) {
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
 # まとめ
 
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
-既視感高い内容でしたが、
+既視感高い内容だったかもしれませんが、
 Database周りは誰もが必ず扱うジャンルなので題材として選んでみました。
 
 今後も新たなTipsが出てきたら共有していきたいと思います。
@@ -401,7 +466,7 @@ Database周りは誰もが必ず扱うジャンルなので題材として選ん
                 </script>
                 </section>
 
-				<section data-markdown data-Transition="slide-in fade-out">
+				<section data-markdown>
                 <script type="text/template">
 ## END.
                 </script>
